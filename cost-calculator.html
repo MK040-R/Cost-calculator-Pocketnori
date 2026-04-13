@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pocketnori · Cost Calculator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ─── Tokens ─────────────────────────────────────────────────────── */
+    :root {
+      --bg:           #f3f8ff;
+      --bg-glow:      rgba(0, 194, 122, 0.08);
+      --surface:      #ffffff;
+      --surface2:     #f7faff;
+      --border:       rgba(15, 23, 42, 0.10);
+      --border-soft:  rgba(15, 23, 42, 0.06);
+      --text:         #041021;
+      --text-muted:   #5f6b7a;
+      --selected:     #00c27a;
+      --selected-bg:  rgba(0, 194, 122, 0.12);
+      --shadow-card:  0 18px 45px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.04);
+      /* section accent colours */
+      --var-c:        #0f7ae5;   /* variable costs  */
+      --fix-c:        #0b9b63;   /* fixed infra     */
+      --ppl-c:        #d96a3b;   /* people          */
+      --tot-c:        #b45309;   /* totals          */
+      /* flash */
+      --flash:        rgba(0, 194, 122, 0.18);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background:
+        radial-gradient(circle at top left, var(--bg-glow), transparent 28%),
+        linear-gradient(180deg, #f7fbff 0%, var(--bg) 42%, #eef6ff 100%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 28px 16px 48px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    /* ─── Header ─────────────────────────────────────────────────────── */
+    .header {
+      margin-bottom: 24px;
+      padding: 8px 2px;
+    }
+    .header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+    .header p  { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+    /* ─── Cards ──────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow-card);
+      padding: 20px;
+      margin-bottom: 14px;
+    }
+    .card-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    /* ─── Inputs ─────────────────────────────────────────────────────── */
+    input[type=number] {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 7px 10px;
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      width: 100%;
+      transition: border-color 0.15s;
+    }
+    input[type=number]:focus {
+      outline: none;
+      border-color: var(--selected);
+      box-shadow: 0 0 0 3px rgba(0, 194, 122, 0.14);
+    }
+    input[type=number]::-webkit-inner-spin-button { opacity: 0.5; }
+
+    /* ─── Field grid ─────────────────────────────────────────────────── */
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      gap: 12px;
+    }
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+    }
+    .field-row { display: flex; align-items: center; gap: 7px; }
+    .field-row input { flex: 1; }
+    .unit { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+
+    /* ─── Transcription toggle ───────────────────────────────────────── */
+    .tx-toggle {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .tx-btn {
+      padding: 12px 10px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface2);
+      color: var(--text-muted);
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .tx-btn:hover {
+      border-color: var(--selected);
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+    .tx-btn.active {
+      background: var(--selected-bg);
+      border-color: var(--selected);
+      color: var(--text);
+    }
+    .tx-btn .letter {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--selected);
+      margin-bottom: 4px;
+    }
+    .tx-btn:not(.active) .letter { color: var(--text-muted); }
+    .tx-btn .desc { font-size: 11px; line-height: 1.4; }
+
+    /* Option fields: hidden/shown */
+    .opt-fields { display: none; }
+    .opt-fields.show { display: grid; }
+
+    /* ─── Divider ────────────────────────────────────────────────────── */
+    .divider { border: none; border-top: 1px solid var(--border-soft); margin: 16px 0; }
+
+    /* ─── Locked card ────────────────────────────────────────────────── */
+    .locked-card {
+      background: var(--surface2);
+      border: 1px solid var(--border-soft);
+      border-radius: 14px;
+      padding: 14px 16px;
+    }
+    .locked-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      padding: 5px 0;
+      border-bottom: 1px solid var(--border-soft);
+      font-size: 13px;
+    }
+    .locked-row:last-child { border-bottom: none; }
+    .locked-row .lbl { color: var(--text-muted); }
+    .locked-row .val { font-family: 'Inter', sans-serif; font-size: 12px; }
+    .lock-note {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-style: italic;
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+
+    /* ─── Infra grid ─────────────────────────────────────────────────── */
+    .infra-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 10px;
+    }
+    .infra-item {
+      background: var(--surface2);
+      border: 1px solid var(--border-soft);
+      border-radius: 14px;
+      padding: 12px;
+    }
+    .infra-item.fly-item { grid-column: span 2; min-width: 0; }
+    .infra-item .svc { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+    .infra-item .note { font-size: 11px; color: var(--text-muted); margin-top: 7px; line-height: 1.4; }
+    .static-val {
+      background: var(--surface);
+      border: 1px solid var(--border-soft);
+      border-radius: 10px;
+      padding: 7px 10px;
+      color: var(--text-muted);
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+    }
+    .fly-sub { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .fly-sub-col { display: flex; flex-direction: column; gap: 5px; }
+    .fly-sub-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+    }
+    .fly-sub input { font-size: 13px; padding: 7px 10px; }
+
+    /* ─── Audio hours stat ───────────────────────────────────────────── */
+    .hours-stat {
+      margin-top: 14px;
+      padding: 10px 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border-soft);
+      border-radius: 14px;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .hours-stat .stat-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .hours-stat .stat-vals { display: flex; gap: 16px; flex-wrap: wrap; }
+    .hours-stat .stat-val {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--var-c);
+    }
+    .hours-stat .stat-val span {
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--text-muted);
+      margin-left: 3px;
+    }
+
+    /* ─── Display controls bar ───────────────────────────────────────── */
+    .display-bar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 14px;
+      padding: 16px 18px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow-card);
+      backdrop-filter: blur(14px);
+    }
+    .pill-toggle {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      overflow: hidden;
+      background: var(--surface);
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+    }
+    .pill-btn {
+      padding: 6px 18px;
+      border: none;
+      background: var(--surface2);
+      color: var(--text-muted);
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    .pill-btn.active { background: var(--selected); color: #041021; }
+    .rate-group {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .rate-group input { width: 78px; }
+
+    /* ─── Tabbed controls ────────────────────────────────────────────── */
+    .tab-shell {
+      margin-top: 16px;
+    }
+    .tab-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .tab-btn {
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.78);
+      color: var(--text-muted);
+      border-radius: 999px;
+      padding: 10px 14px;
+      font: 600 12px 'Inter', sans-serif;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .tab-btn:hover {
+      color: var(--text);
+      border-color: var(--selected);
+    }
+    .tab-btn.active {
+      background: var(--selected);
+      border-color: var(--selected);
+      color: #041021;
+      box-shadow: 0 10px 24px rgba(0, 194, 122, 0.18);
+    }
+    .tab-panel {
+      display: none;
+    }
+    .tab-panel.active {
+      display: block;
+    }
+
+    /* ─── Cost table ─────────────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      padding: 10px 14px;
+      text-align: right;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+    }
+    thead th:first-child { text-align: left; }
+    td {
+      padding: 7px 14px;
+      border-bottom: 1px solid var(--border-soft);
+      vertical-align: middle;
+    }
+    td.label { color: var(--text-muted); }
+    td.num {
+      text-align: right;
+      font-family: 'Inter', sans-serif;
+      font-weight: 500;
+    }
+    .inr-sub { display: block; font-size: 10px; color: var(--text-muted); font-weight: 400; }
+
+    /* Section header rows */
+    tr.sec-hdr td {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 16px 14px 5px;
+      border-bottom: none;
+    }
+    tr.sec-var  td { color: var(--var-c); }
+    tr.sec-fix  td { color: var(--fix-c); }
+    tr.sec-ppl  td { color: var(--ppl-c); }
+    tr.sec-tot  td { color: var(--tot-c); }
+
+    /* Cost value tints */
+    tr.row-var td.num { color: var(--var-c); }
+    tr.row-fix td.num { color: var(--fix-c); }
+    tr.row-ppl td.num { color: var(--ppl-c); }
+
+    /* Subtotals */
+    tr.subtotal td {
+      font-weight: 700;
+      border-top: 1px solid var(--border);
+    }
+
+    /* Grand total */
+    tr.grand-total td {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--tot-c);
+      border-top: 2px solid var(--tot-c);
+      padding-top: 12px;
+    }
+
+    /* Per-user / breakeven */
+    tr.per-user td { font-size: 13px; }
+    tr.per-user td.num { color: var(--text); font-family: 'Inter', sans-serif; }
+    tr.breakeven td { font-size: 12px; }
+    tr.breakeven td.label { color: var(--text-muted); }
+    tr.breakeven td.num { color: var(--text); font-family: 'Inter', sans-serif; }
+    tr.breakeven .formula { font-size: 10px; color: var(--text-muted); margin-top: 2px; display: block; }
+
+    /* Flash animation */
+    @keyframes cellFlash {
+      0%   { background: var(--flash); }
+      100% { background: transparent; }
+    }
+    .flash { animation: cellFlash 0.7s ease-out; }
+
+    /* ─── Footnote ───────────────────────────────────────────────────── */
+    .footnote {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 14px;
+      padding: 12px 14px;
+      border: 1px solid var(--border-soft);
+      border-radius: 14px;
+      background: var(--surface);
+      box-shadow: var(--shadow-card);
+      line-height: 1.6;
+    }
+    .note-text {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-style: italic;
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+
+    /* ─── Responsive ─────────────────────────────────────────────────── */
+    @media (max-width: 580px) {
+      .tx-toggle { grid-template-columns: 1fr; }
+      .field-grid { grid-template-columns: 1fr 1fr; }
+      .infra-grid { grid-template-columns: 1fr 1fr; }
+      .display-bar { gap: 10px; }
+      .tab-bar { gap: 6px; }
+      .tab-btn { width: 100%; text-align: center; }
+      thead th, td { padding: 7px 8px; font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────────── -->
+<div class="header">
+  <h1>Pocketnori · Cost Calculator</h1>
+</div>
+
+<!-- ── Display Controls ────────────────────────────────────────────────── -->
+<div class="display-bar">
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span style="font-size:12px;color:var(--text-muted);">Display:</span>
+    <div class="pill-toggle">
+      <button class="pill-btn active" onclick="setCurrency('usd')">USD $</button>
+      <button class="pill-btn"        onclick="setCurrency('inr')">INR ₹</button>
+    </div>
+  </div>
+  <div class="rate-group">
+    <span>EUR/USD</span>
+    <input type="number" id="eur_usd" value="1.18" step="0.01" min="0.5" max="3">
+  </div>
+  <div class="rate-group">
+    <span>USD/INR</span>
+    <input type="number" id="usd_inr" value="95" step="1" min="1" max="500">
+  </div>
+</div>
+
+<!-- ── Cost Breakdown Table ────────────────────────────────────────────── -->
+<div class="card">
+  <div class="card-title">Cost Breakdown</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:42%;text-align:left;">Category</th>
+          <th id="th_m1">M1 · 100 users</th>
+          <th id="th_m2">M2 · 500 users</th>
+          <th id="th_m3">M3 · 2,000 users</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="tab-shell">
+  <div class="tab-bar" role="tablist" aria-label="Calculator sections">
+    <button class="tab-btn active" type="button" data-tab="transcription" onclick="setTab('transcription')">1 · Transcription Architecture</button>
+    <button class="tab-btn" type="button" data-tab="usage" onclick="setTab('usage')">2 · Usage Variables</button>
+    <button class="tab-btn" type="button" data-tab="infrastructure" onclick="setTab('infrastructure')">3 · Infrastructure Costs</button>
+    <button class="tab-btn" type="button" data-tab="llm" onclick="setTab('llm')">4 · LLM Costs</button>
+    <button class="tab-btn" type="button" data-tab="people" onclick="setTab('people')">5 · People & Overhead</button>
+  </div>
+
+  <div class="tab-panel active" data-panel="transcription">
+    <div class="card">
+      <div class="card-title">1 &middot; Transcription Architecture</div>
+
+      <div class="tx-toggle">
+        <button class="tx-btn" onclick="setOption('A')">
+          <div class="letter">A</div>
+          <div class="desc">Deepgram<br>Transcription + Diarization</div>
+        </button>
+        <button class="tx-btn" onclick="setOption('B')">
+          <div class="letter">B</div>
+          <div class="desc">PyannoteAI STT Orchestration<br>Transcription + Diarization</div>
+        </button>
+        <button class="tx-btn active" onclick="setOption('C')">
+          <div class="letter">C</div>
+          <div class="desc">Whisper On-device<br>+ PyannoteAI Diarization only</div>
+        </button>
+      </div>
+
+      <div id="opt_A" class="opt-fields field-grid">
+        <div class="field">
+          <label>Deepgram rate</label>
+          <div class="field-row">
+            <input type="number" id="deepgram_rate" value="0.0043" step="0.0001" min="0">
+            <span class="unit">$/min</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="opt_B" class="opt-fields field-grid">
+        <div class="field">
+          <label>PyannoteAI plan fee</label>
+          <div class="field-row">
+            <input type="number" id="b_plan_fee" value="99" step="1" min="0">
+            <span class="unit">€/month</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Hours included in plan</label>
+          <div class="field-row">
+            <input type="number" id="b_plan_hours" value="825" step="1" min="0">
+            <span class="unit">hours</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Overage rate (STT Orchestration)</label>
+          <div class="field-row">
+            <input type="number" id="b_overage_rate" value="0.25" step="0.01" min="0">
+            <span class="unit">€/hr</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="opt_C" class="opt-fields field-grid show">
+        <div class="field">
+          <label>PyannoteAI plan fee</label>
+          <div class="field-row">
+            <input type="number" id="c_plan_fee" value="99" step="1" min="0">
+            <span class="unit">€/month</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Hours included in plan</label>
+          <div class="field-row">
+            <input type="number" id="c_plan_hours" value="825" step="1" min="0">
+            <span class="unit">hours</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Overage rate (Diarization only)</label>
+          <div class="field-row">
+            <input type="number" id="c_overage_rate" value="0.12" step="0.01" min="0">
+            <span class="unit">€/hr</span>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider">
+      <div class="field-grid">
+        <div class="field">
+          <label>Voiceprint cost (all options)</label>
+          <div class="field-row">
+            <input type="number" id="voiceprint_rate" value="0.30" step="0.01" min="0">
+            <span class="unit">€/voiceprint</span>
+          </div>
+        </div>
+      </div>
+      <p class="note-text">
+        Sources: Deepgram verified April 2026, deepgram.com/pricing &middot; PyannoteAI verified April 2026, pyannote.ai/pricing.
+        Rates above are editable. Defaults set April 2026. Verify current rates before financial decisions.
+      </p>
+    </div>
+  </div>
+
+  <div class="tab-panel" data-panel="usage">
+    <div class="card">
+      <div class="card-title">2 &middot; Usage Variables</div>
+
+      <div style="margin-bottom:16px;">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:8px;">User count per milestone</div>
+        <div class="fly-sub">
+          <div class="fly-sub-col">
+            <div class="fly-sub-label">M1 users</div>
+            <input type="number" id="users_m1" value="25" step="25" min="1">
+          </div>
+          <div class="fly-sub-col">
+            <div class="fly-sub-label">M2 users</div>
+            <input type="number" id="users_m2" value="100" step="50" min="1">
+          </div>
+          <div class="fly-sub-col">
+            <div class="fly-sub-label">M3 users</div>
+            <input type="number" id="users_m3" value="1000" step="100" min="1">
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <div class="field-grid">
+        <div class="field">
+          <label>Avg meeting duration</label>
+          <div class="field-row">
+            <input type="number" id="avg_duration" value="30" step="5" min="1">
+            <span class="unit">minutes</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Meetings / user / week</label>
+          <div class="field-row">
+            <input type="number" id="meetings_per_week" value="25" step="1" min="1">
+            <span class="unit">meetings</span>
+          </div>
+          <span class="unit" id="mpm_display" style="color:var(--text-muted);">≈ 64 meetings/month</span>
+        </div>
+        <div class="field">
+          <label>New speakers / user / month</label>
+          <div class="field-row">
+            <input type="number" id="new_speakers" value="5" step="1" min="0">
+            <span class="unit">voiceprints</span>
+          </div>
+        </div>
+      </div>
+      <div class="hours-stat">
+        <span class="stat-label">Total audio hours/month</span>
+        <div class="stat-vals">
+          <div class="stat-val" id="hours_m1">—<span>M1</span></div>
+          <div class="stat-val" id="hours_m2">—<span>M2</span></div>
+          <div class="stat-val" id="hours_m3">—<span>M3</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-panel" data-panel="infrastructure">
+    <div class="card">
+      <div class="card-title">3 &middot; Infrastructure Costs</div>
+      <div class="infra-grid">
+        <div class="infra-item">
+          <div class="svc">Supabase</div>
+          <div class="field">
+            <label>$/month</label>
+            <input type="number" id="supabase" value="25" step="1" min="0">
+          </div>
+          <p class="note">Pro plan. Same across all milestones.</p>
+        </div>
+
+        <div class="infra-item fly-item">
+          <div class="svc">Fly.io</div>
+          <div class="fly-sub">
+            <div class="fly-sub-col">
+              <div class="fly-sub-label">M1 · 25 users</div>
+              <div class="field-row">
+                <input type="number" id="fly_m1" value="20" step="5" min="0">
+                <span class="unit">$/mo</span>
+              </div>
+            </div>
+            <div class="fly-sub-col">
+              <div class="fly-sub-label">M2 · 100 users</div>
+              <div class="field-row">
+                <input type="number" id="fly_m2" value="40" step="5" min="0">
+                <span class="unit">$/mo</span>
+              </div>
+            </div>
+            <div class="fly-sub-col">
+              <div class="fly-sub-label">M3 · 1,000 users</div>
+              <div class="field-row">
+                <input type="number" id="fly_m3" value="80" step="10" min="0">
+                <span class="unit">$/mo</span>
+              </div>
+            </div>
+          </div>
+          <p class="note">Scales with user count. Edit per milestone.</p>
+        </div>
+
+        <div class="infra-item">
+          <div class="svc">Miscellaneous</div>
+          <div class="static-val">$9 / $35 / $35</div>
+          <p class="note">Sentry, Apple Developer, and Domain + SSL combined.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-panel" data-panel="llm">
+    <div class="card">
+      <div class="card-title">4 &middot; LLM Costs &nbsp;<span style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">locked — update manually if stack changes</span></div>
+      <div class="locked-card">
+        <div class="locked-row">
+          <span class="lbl">Strategy</span>
+          <span class="val">80% Gemini 2.5 Flash-Lite + 20% Claude Haiku 4.5</span>
+        </div>
+        <div class="locked-row">
+          <span class="lbl">Gemini 2.5 Flash-Lite</span>
+          <span class="val">$0.10 input / $0.40 output per 1M tokens</span>
+        </div>
+        <div class="locked-row">
+          <span class="lbl">Claude Haiku 4.5</span>
+          <span class="val">$0.25 input / $1.25 output per 1M tokens</span>
+        </div>
+        <div class="locked-row">
+          <span class="lbl">Blended effective rate</span>
+          <span class="val">~$0.13/M input &nbsp;·&nbsp; ~$0.57/M output</span>
+        </div>
+        <div class="locked-row">
+          <span class="lbl">Tokens per meeting</span>
+          <span class="val">~8,000 input &nbsp;·&nbsp; ~1,500 output</span>
+        </div>
+        <p class="lock-note">
+          Sources: Gemini 2.5 Flash-Lite $0.10/$0.40 per 1M (Google, April 2026) &middot; Claude Haiku 4.5 $0.25/$1.25 per 1M (Anthropic, April 2026).
+          LLM model mix is fixed. Update manually if stack changes.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-panel" data-panel="people">
+    <div class="card">
+      <div class="card-title">5 &middot; People & Overhead &nbsp;<span style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">enter monthly salary or overhead per milestone in INR</span></div>
+
+      <div style="display:grid;gap:16px;">
+        <div>
+          <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:8px;">Founding Engineer</div>
+          <div class="fly-sub">
+            <div class="fly-sub-col">
+              <div class="fly-sub-label">M1</div>
+              <input type="number" id="p_engineer_m1" value="60000" step="1000" min="0">
+            </div>
+            <div class="fly-sub-col">
+              <div class="fly-sub-label">M2</div>
+              <input type="number" id="p_engineer_m2" value="60000" step="1000" min="0">
+            </div>
+            <div class="fly-sub-col">
+              <div class="fly-sub-label">M3</div>
+              <input type="number" id="p_engineer_m3" value="60000" step="1000" min="0">
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:8px;">Designer (part-time)</div>
+          <div class="fly-sub">
+            <div class="fly-sub-col">
+              <div class="fly-sub-label">M1</div>
+              <input type="number" id="p_designer_m1" value="0" step="1000" min="0">
+            </div>
+            <div class="fly-sub-col">
+              <div class="fly-sub-label">M2</div>
+              <input type="number" id="p_designer_m2" value="30000" step="1000" min="0">
+            </div>
+            <div class="fly-sub-col">
+              <div class="fly-sub-label">M3</div>
+              <input type="number" id="p_designer_m3" value="30000" step="1000" min="0">
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:8px;">Marketing / Founder</div>
+          <div class="fly-sub">
+            <div class="fly-sub-col">
+              <div class="fly-sub-label">M1</div>
+              <input type="number" id="p_marketing_m1" value="0" step="1000" min="0">
+            </div>
+            <div class="fly-sub-col">
+              <div class="fly-sub-label">M2</div>
+              <input type="number" id="p_marketing_m2" value="20000" step="1000" min="0">
+            </div>
+            <div class="fly-sub-col">
+              <div class="fly-sub-label">M3</div>
+              <input type="number" id="p_marketing_m3" value="40000" step="1000" min="0">
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:8px;">Miscellaneous</div>
+          <div class="fly-sub">
+            <div class="fly-sub-col">
+              <div class="fly-sub-label">M1</div>
+              <input type="number" id="p_misc_m1" value="10000" step="1000" min="0">
+            </div>
+            <div class="fly-sub-col">
+              <div class="fly-sub-label">M2</div>
+              <input type="number" id="p_misc_m2" value="15000" step="1000" min="0">
+            </div>
+            <div class="fly-sub-col">
+              <div class="fly-sub-label">M3</div>
+              <input type="number" id="p_misc_m3" value="20000" step="1000" min="0">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footnote">
+  Prices verified April 2026. &nbsp;
+  Deepgram (deepgram.com/pricing) &middot;
+  PyannoteAI (pyannote.ai/pricing) &middot;
+  Gemini 2.5 Flash-Lite (Google) &middot;
+  Claude Haiku 4.5 (Anthropic). &nbsp;
+  EUR/USD and USD/INR conversion rates are editable above.
+  Verify current rates before financial decisions.
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════════════════════════════ -->
+<script>
+"use strict";
+
+// ── Locked constants ──────────────────────────────────────────────────────
+// LLM blended rates (80% Gemini 2.5 Flash-Lite + 20% Claude Haiku 4.5)
+const LLM_INPUT_RATE_PER_M  = 0.13;   // blended input  $/M tokens
+const LLM_OUTPUT_RATE_PER_M = 0.57;   // blended output $/M tokens
+const LLM_INPUT_TPM  = 8000;          // input tokens per meeting
+const LLM_OUTPUT_TPM = 1500;          // output tokens per meeting
+
+// Fixed infra (not user-editable)
+const SENTRY = [0, 26, 26];           // $/month for M1, M2, M3
+const APPLE  = 8;                     // $/month ($99/yr amortised)
+const DOMAIN = 1;                     // $/month ($15/yr amortised)
+
+// Milestone user counts — now driven from state (see S.users_m1/m2/m3)
+function getUsers() { return [S.users_m1, S.users_m2, S.users_m3]; }
+
+// ── Mutable state ─────────────────────────────────────────────────────────
+// All values match their HTML input defaults.
+const S = {
+  // Display
+  currency: 'usd',
+  eur_usd:  1.18,
+  usd_inr:  95,
+  // Transcription option
+  option: 'C',
+  // Option A
+  deepgram_rate:  0.0043,
+  // Option B
+  b_plan_fee:     99,
+  b_plan_hours:   825,
+  b_overage_rate: 0.25,
+  // Option C
+  c_plan_fee:     99,
+  c_plan_hours:   825,
+  c_overage_rate: 0.12,
+  // Shared
+  voiceprint_rate: 0.30,
+  // Usage
+  avg_duration:      30,
+  meetings_per_week: 25,
+  new_speakers:       5,
+  // Milestone user counts
+  users_m1: 25,
+  users_m2: 100,
+  users_m3: 1000,
+  // Infra (editable)
+  supabase: 25,
+  fly_m1:   20,
+  fly_m2:   40,
+  fly_m3:   80,
+  // People (INR)
+  p_engineer_m1:  60000,
+  p_engineer_m2:  60000,
+  p_engineer_m3:  60000,
+  p_designer_m1:      0,
+  p_designer_m2:  30000,
+  p_designer_m3:  30000,
+  p_marketing_m1:     0,
+  p_marketing_m2: 20000,
+  p_marketing_m3: 40000,
+  p_misc_m1:      10000,
+  p_misc_m2:      15000,
+  p_misc_m3:      20000,
+};
+
+// Previous computed USD values per cell id — used to detect changes for flash
+let prevVals = {};
+
+// ── Calculations ──────────────────────────────────────────────────────────
+
+// meetings_per_month = (meetings_per_week / 7) × 30
+function meetingsPerMonth() {
+  return (S.meetings_per_week / 7) * 30;
+}
+
+// Total audio hours for a given user count
+function audioHours(users) {
+  return users * meetingsPerMonth() * (S.avg_duration / 60);
+}
+
+// Transcription cost in USD for a given user count
+function txnCost(users) {
+  const hrs = audioHours(users);
+  const e2u = S.eur_usd;
+  if (S.option === 'A') {
+    // Deepgram: minutes × rate/min
+    return hrs * 60 * S.deepgram_rate;
+  }
+  if (S.option === 'B') {
+    // PyannoteAI STT Orchestration: flat plan fee + overage (EUR → USD)
+    return (S.b_plan_fee + Math.max(0, hrs - S.b_plan_hours) * S.b_overage_rate) * e2u;
+  }
+  // Option C: Whisper on-device — transcription is free
+  return 0;
+}
+
+// Diarization cost (only used for Option C)
+function diarCost(users) {
+  if (S.option !== 'C') return null;
+  const hrs = audioHours(users);
+  return (S.c_plan_fee + Math.max(0, hrs - S.c_plan_hours) * S.c_overage_rate) * S.eur_usd;
+}
+
+// Voiceprint cost: users × new speakers × rate (EUR → USD)
+function vpCost(users) {
+  return users * S.new_speakers * S.voiceprint_rate * S.eur_usd;
+}
+
+// LLM inference cost
+function llmCost(users) {
+  const meetings = users * meetingsPerMonth();
+  const inputCost  = (meetings * LLM_INPUT_TPM  / 1e6) * LLM_INPUT_RATE_PER_M;
+  const outputCost = (meetings * LLM_OUTPUT_TPM / 1e6) * LLM_OUTPUT_RATE_PER_M;
+  return inputCost + outputCost;
+}
+
+// Fly.io cost by milestone index (0=M1, 1=M2, 2=M3)
+function flyCost(mi) {
+  return [S.fly_m1, S.fly_m2, S.fly_m3][mi];
+}
+
+// Convert an INR people value to USD
+function inrToUsd(inr) {
+  return inr / S.usd_inr;
+}
+
+// Build the full data object
+function buildData() {
+  const U = getUsers();
+  const d = {
+    txn:       U.map(u => txnCost(u)),
+    diar:      U.map(u => diarCost(u)),
+    vp:        U.map(u => vpCost(u)),
+    llm:       U.map(u => llmCost(u)),
+    supabase:  U.map(() => S.supabase),
+    fly:       [0, 1, 2].map(i => flyCost(i)),
+    infraMisc: [0, 1, 2].map(i => SENTRY[i] + APPLE + DOMAIN),
+    engineer:  [S.p_engineer_m1, S.p_engineer_m2, S.p_engineer_m3].map(inrToUsd),
+    designer:  [S.p_designer_m1, S.p_designer_m2, S.p_designer_m3].map(inrToUsd),
+    marketing: [S.p_marketing_m1, S.p_marketing_m2, S.p_marketing_m3].map(inrToUsd),
+    misc:      [S.p_misc_m1, S.p_misc_m2, S.p_misc_m3].map(inrToUsd),
+  };
+
+  // Subtotals
+  d.subVar = [0, 1, 2].map(i =>
+    d.txn[i] + (d.diar[i] || 0) + d.vp[i] + d.llm[i]
+  );
+  d.subFix = [0, 1, 2].map(i =>
+    d.supabase[i] + d.fly[i] + d.infraMisc[i]
+  );
+  d.subPpl = [0, 1, 2].map(i =>
+    d.engineer[i] + d.designer[i] + d.marketing[i] + d.misc[i]
+  );
+  d.total   = [0, 1, 2].map(i => d.subVar[i] + d.subFix[i] + d.subPpl[i]);
+  d.perUser = [0, 1, 2].map(i => d.total[i] / U[i]);
+  d.be60    = [0, 1, 2].map(i => d.perUser[i] / 0.40);
+  d.be70    = [0, 1, 2].map(i => d.perUser[i] / 0.30);
+  return d;
+}
+
+// ── Formatting ────────────────────────────────────────────────────────────
+
+// Format a USD value according to current display currency
+function fmtUsd(v) {
+  if (v === null || isNaN(v)) return '—';
+  if (S.currency === 'inr') {
+    return '₹' + Math.round(v * S.usd_inr).toLocaleString('en-IN');
+  }
+  return '$' + Math.round(v).toLocaleString('en-US');
+}
+
+// Format a people value (INR primary, USD sub-line)
+function fmtPeople(inrVal) {
+  const usd = inrToUsd(inrVal);
+  if (S.currency === 'inr') {
+    return '₹' + inrVal.toLocaleString('en-IN');
+  }
+  return '$' + Math.round(usd).toLocaleString('en-US');
+}
+
+// ── Table rendering ───────────────────────────────────────────────────────
+
+function renderTable() {
+  const d = buildData();
+
+  // Build flat cell → USD-value map for change detection
+  const newVals = {};
+  const cellKeys = ['txn','diar','vp','llm','subVar','supabase','fly','infraMisc',
+                    'subFix','engineer','designer','marketing','misc','subPpl','total','perUser','be60','be70'];
+  cellKeys.forEach(k => {
+    [0,1,2].forEach(i => { newVals[`${k}_${i}`] = d[k] ? d[k][i] : null; });
+  });
+
+  // Detect changed cells
+  const changed = new Set();
+  Object.keys(newVals).forEach(k => {
+    if (prevVals[k] !== undefined && Math.abs((newVals[k]||0) - (prevVals[k]||0)) > 0.0001) {
+      changed.add(k);
+    }
+  });
+  prevVals = { ...newVals };
+
+  // Generate HTML rows
+  const isC = S.option === 'C';
+  const rows = [];
+
+  // Helper: standard row
+  const row = (id, label, vals, cls, sub = false, grand = false) => {
+    const tr = grand ? 'grand-total' : sub ? `subtotal ${cls}` : cls;
+    return `<tr class="${tr}">
+      <td class="label">${label}</td>
+      <td class="num" data-cell="${id}_0">${fmtUsd(vals[0])}</td>
+      <td class="num" data-cell="${id}_1">${fmtUsd(vals[1])}</td>
+      <td class="num" data-cell="${id}_2">${fmtUsd(vals[2])}</td>
+    </tr>`;
+  };
+
+  // Helper: people row
+  const pplRow = (id, label, inrVals) => {
+    return `<tr class="row-ppl">
+      <td class="label">${label}</td>
+      <td class="num" data-cell="${id}_0">${fmtPeople(inrVals[0])}</td>
+      <td class="num" data-cell="${id}_1">${fmtPeople(inrVals[1])}</td>
+      <td class="num" data-cell="${id}_2">${fmtPeople(inrVals[2])}</td>
+    </tr>`;
+  };
+
+  // ── Section A: Variable Costs
+  rows.push('<tr class="sec-hdr sec-var"><td colspan="4">A &middot; Variable Costs</td></tr>');
+  if (isC) {
+    rows.push(row('txn',  'Whisper Transcription (on-device)',           d.txn,  'row-var'));
+    rows.push(row('diar', 'PyannoteAI Diarization',                      d.diar, 'row-var'));
+  } else {
+    const txnLabel = S.option === 'A'
+      ? 'Deepgram Transcription + Diarization'
+      : 'PyannoteAI STT Orchestration';
+    rows.push(row('txn', txnLabel, d.txn, 'row-var'));
+  }
+  rows.push(row('vp',     'Voiceprints (new speakers × rate)',            d.vp,     'row-var'));
+  rows.push(row('llm',    'LLM Inference',                               d.llm,    'row-var'));
+  rows.push(row('subVar', 'Subtotal Variable',                           d.subVar, 'row-var', true));
+
+  // ── Section B: Fixed Infrastructure
+  rows.push('<tr class="sec-hdr sec-fix"><td colspan="4">B &middot; Fixed Infrastructure</td></tr>');
+  rows.push(row('supabase', 'Supabase',               d.supabase, 'row-fix'));
+  rows.push(row('fly',      'Fly.io',                 d.fly,      'row-fix'));
+  rows.push(row('infraMisc','Miscellaneous',          d.infraMisc,'row-fix'));
+  rows.push(row('subFix',   'Subtotal Fixed Infra',    d.subFix,  'row-fix', true));
+
+  // ── Section C: People
+  rows.push('<tr class="sec-hdr sec-ppl"><td colspan="4">C &middot; People & Overhead</td></tr>');
+  rows.push(pplRow('engineer',  'Founding Engineer',     [S.p_engineer_m1, S.p_engineer_m2, S.p_engineer_m3]));
+  rows.push(pplRow('designer',  'Designer (part-time)',  [S.p_designer_m1, S.p_designer_m2, S.p_designer_m3]));
+  rows.push(pplRow('marketing', 'Marketing / Founder',   [S.p_marketing_m1, S.p_marketing_m2, S.p_marketing_m3]));
+  rows.push(pplRow('misc',      'Miscellaneous',         [S.p_misc_m1, S.p_misc_m2, S.p_misc_m3]));
+  rows.push(row('subPpl', 'Subtotal People', d.subPpl, 'row-ppl', true));
+
+  // ── Section D: Totals
+  rows.push('<tr class="sec-hdr sec-tot"><td colspan="4">D &middot; Totals</td></tr>');
+  rows.push(row('total', '&#9658; TOTAL MONTHLY BURN', d.total, '', false, true));
+
+  // Per-user row
+  rows.push(`<tr class="per-user">
+    <td class="label">Cost per user</td>
+    <td class="num" data-cell="perUser_0">${fmtUsd(d.perUser[0])}</td>
+    <td class="num" data-cell="perUser_1">${fmtUsd(d.perUser[1])}</td>
+    <td class="num" data-cell="perUser_2">${fmtUsd(d.perUser[2])}</td>
+  </tr>`);
+
+  // Breakeven rows
+  rows.push(`<tr class="breakeven">
+    <td class="label">Break-even sub price (60% margin)<span class="formula">cost/user &divide; 0.40</span></td>
+    <td class="num" data-cell="be60_0">${fmtUsd(d.be60[0])}</td>
+    <td class="num" data-cell="be60_1">${fmtUsd(d.be60[1])}</td>
+    <td class="num" data-cell="be60_2">${fmtUsd(d.be60[2])}</td>
+  </tr>`);
+  rows.push(`<tr class="breakeven">
+    <td class="label">Break-even sub price (70% margin)<span class="formula">cost/user &divide; 0.30</span></td>
+    <td class="num" data-cell="be70_0">${fmtUsd(d.be70[0])}</td>
+    <td class="num" data-cell="be70_1">${fmtUsd(d.be70[1])}</td>
+    <td class="num" data-cell="be70_2">${fmtUsd(d.be70[2])}</td>
+  </tr>`);
+
+  document.getElementById('tbody').innerHTML = rows.join('');
+
+  // Apply flash to changed cells
+  if (changed.size > 0) {
+    requestAnimationFrame(() => {
+      changed.forEach(id => {
+        const el = document.querySelector(`[data-cell="${id}"]`);
+        if (!el) return;
+        el.classList.remove('flash');
+        void el.offsetWidth; // force reflow to restart animation
+        el.classList.add('flash');
+        el.addEventListener('animationend', () => el.classList.remove('flash'), { once: true });
+      });
+    });
+  }
+
+  // Update meetings/month display
+  const mpm = document.getElementById('mpm_display');
+  if (mpm) mpm.textContent = `≈ ${Math.round(meetingsPerMonth())} meetings/month`;
+
+  // Update total audio hours per milestone
+  const U = getUsers();
+  U.forEach((u, i) => {
+    const el = document.getElementById(`hours_m${i + 1}`);
+    if (!el) return;
+    const hrs = audioHours(u);
+    const label = ['M1', 'M2', 'M3'][i];
+    el.innerHTML = `${Math.round(hrs).toLocaleString('en-US')} hrs<span>${label}</span>`;
+  });
+
+  // Update table column headers with current user counts
+  const labels = ['M1', 'M2', 'M3'];
+  U.forEach((u, i) => {
+    const th = document.getElementById(`th_m${i + 1}`);
+    if (th) th.textContent = `${labels[i]} · ${u.toLocaleString('en-US')} users`;
+  });
+}
+
+// ── Controls ──────────────────────────────────────────────────────────────
+
+function setOption(opt) {
+  S.option = opt;
+  ['A','B','C'].forEach(o => {
+    document.querySelectorAll('.tx-btn')[['A','B','C'].indexOf(o)]
+      .classList.toggle('active', o === opt);
+    document.getElementById(`opt_${o}`)
+      .classList.toggle('show', o === opt);
+  });
+  renderTable();
+}
+
+function setCurrency(cur) {
+  S.currency = cur;
+  document.querySelectorAll('.pill-btn').forEach((btn, i) => {
+    btn.classList.toggle('active', ['usd','inr'][i] === cur);
+  });
+  renderTable();
+}
+
+function setTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+  document.querySelectorAll('.tab-panel').forEach(panel => {
+    panel.classList.toggle('active', panel.dataset.panel === tab);
+  });
+}
+
+// ── Input bindings ────────────────────────────────────────────────────────
+
+function bind(id, key) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    const v = parseFloat(el.value);
+    if (!isNaN(v) && v >= 0) { S[key] = v; renderTable(); }
+  });
+}
+
+function init() {
+  bind('eur_usd',          'eur_usd');
+  bind('usd_inr',          'usd_inr');
+  bind('deepgram_rate',    'deepgram_rate');
+  bind('b_plan_fee',       'b_plan_fee');
+  bind('b_plan_hours',     'b_plan_hours');
+  bind('b_overage_rate',   'b_overage_rate');
+  bind('c_plan_fee',       'c_plan_fee');
+  bind('c_plan_hours',     'c_plan_hours');
+  bind('c_overage_rate',   'c_overage_rate');
+  bind('voiceprint_rate',  'voiceprint_rate');
+  bind('avg_duration',     'avg_duration');
+  bind('meetings_per_week','meetings_per_week');
+  bind('new_speakers',     'new_speakers');
+  bind('users_m1',         'users_m1');
+  bind('users_m2',         'users_m2');
+  bind('users_m3',         'users_m3');
+  bind('supabase',         'supabase');
+  bind('fly_m1',           'fly_m1');
+  bind('fly_m2',           'fly_m2');
+  bind('fly_m3',           'fly_m3');
+  bind('p_engineer_m1',    'p_engineer_m1');
+  bind('p_engineer_m2',    'p_engineer_m2');
+  bind('p_engineer_m3',    'p_engineer_m3');
+  bind('p_designer_m1',    'p_designer_m1');
+  bind('p_designer_m2',    'p_designer_m2');
+  bind('p_designer_m3',    'p_designer_m3');
+  bind('p_marketing_m1',   'p_marketing_m1');
+  bind('p_marketing_m2',   'p_marketing_m2');
+  bind('p_marketing_m3',   'p_marketing_m3');
+  bind('p_misc_m1',        'p_misc_m1');
+  bind('p_misc_m2',        'p_misc_m2');
+  bind('p_misc_m3',        'p_misc_m3');
+  setTab('transcription');
+  renderTable();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
