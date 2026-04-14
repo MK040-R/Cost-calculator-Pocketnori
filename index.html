@@ -656,21 +656,21 @@
           <div class="svc">Fly.io</div>
           <div class="fly-sub">
             <div class="fly-sub-col">
-              <div class="fly-sub-label">M1 · 25 users</div>
+              <div class="fly-sub-label" id="fly_label_m1">M1 · 25 users</div>
               <div class="field-row">
                 <input type="number" id="fly_m1" value="20" step="5" min="0">
                 <span class="unit">$/mo</span>
               </div>
             </div>
             <div class="fly-sub-col">
-              <div class="fly-sub-label">M2 · 100 users</div>
+              <div class="fly-sub-label" id="fly_label_m2">M2 · 100 users</div>
               <div class="field-row">
                 <input type="number" id="fly_m2" value="40" step="5" min="0">
                 <span class="unit">$/mo</span>
               </div>
             </div>
             <div class="fly-sub-col">
-              <div class="fly-sub-label">M3 · 1,000 users</div>
+              <div class="fly-sub-label" id="fly_label_m3">M3 · 1,000 users</div>
               <div class="field-row">
                 <input type="number" id="fly_m3" value="80" step="10" min="0">
                 <span class="unit">$/mo</span>
@@ -678,6 +678,34 @@
             </div>
           </div>
           <p class="note">Scales with user count. Edit per milestone.</p>
+        </div>
+
+        <div class="infra-item fly-item">
+          <div class="svc">Redis / Celery Worker (Render)</div>
+          <div class="fly-sub">
+            <div class="fly-sub-col">
+              <div class="fly-sub-label" id="redis_label_m1">M1</div>
+              <div class="field-row">
+                <input type="number" id="redis_m1" value="10" step="5" min="0">
+                <span class="unit">$/mo</span>
+              </div>
+            </div>
+            <div class="fly-sub-col">
+              <div class="fly-sub-label" id="redis_label_m2">M2</div>
+              <div class="field-row">
+                <input type="number" id="redis_m2" value="25" step="5" min="0">
+                <span class="unit">$/mo</span>
+              </div>
+            </div>
+            <div class="fly-sub-col">
+              <div class="fly-sub-label" id="redis_label_m3">M3</div>
+              <div class="field-row">
+                <input type="number" id="redis_m3" value="50" step="10" min="0">
+                <span class="unit">$/mo</span>
+              </div>
+            </div>
+          </div>
+          <p class="note">Render Redis (broker + cache) + Celery worker dyno. Edit per milestone.</p>
         </div>
 
         <div class="infra-item">
@@ -867,6 +895,9 @@ const S = {
   fly_m1:   20,
   fly_m2:   40,
   fly_m3:   80,
+  redis_m1: 10,
+  redis_m2: 25,
+  redis_m3: 50,
   // People (INR)
   p_engineer_m1:  60000,
   p_engineer_m2:  60000,
@@ -953,6 +984,7 @@ function buildData() {
     llm:       U.map(u => llmCost(u)),
     supabase:  U.map(() => S.supabase),
     fly:       [0, 1, 2].map(i => flyCost(i)),
+    redis:     [S.redis_m1, S.redis_m2, S.redis_m3],
     infraMisc: [0, 1, 2].map(i => SENTRY[i] + APPLE + DOMAIN),
     engineer:  [S.p_engineer_m1, S.p_engineer_m2, S.p_engineer_m3].map(inrToUsd),
     designer:  [S.p_designer_m1, S.p_designer_m2, S.p_designer_m3].map(inrToUsd),
@@ -965,7 +997,7 @@ function buildData() {
     d.txn[i] + (d.diar[i] || 0) + d.vp[i] + d.llm[i]
   );
   d.subFix = [0, 1, 2].map(i =>
-    d.supabase[i] + d.fly[i] + d.infraMisc[i]
+    d.supabase[i] + d.fly[i] + d.redis[i] + d.infraMisc[i]
   );
   d.subPpl = [0, 1, 2].map(i =>
     d.engineer[i] + d.designer[i] + d.marketing[i] + d.misc[i]
@@ -1004,7 +1036,7 @@ function renderTable() {
 
   // Build flat cell → USD-value map for change detection
   const newVals = {};
-  const cellKeys = ['txn','diar','vp','llm','subVar','supabase','fly','infraMisc',
+  const cellKeys = ['txn','diar','vp','llm','subVar','supabase','fly','redis','infraMisc',
                     'subFix','engineer','designer','marketing','misc','subPpl','total','perUser','be60','be70'];
   cellKeys.forEach(k => {
     [0,1,2].forEach(i => { newVals[`${k}_${i}`] = d[k] ? d[k][i] : null; });
@@ -1062,8 +1094,9 @@ function renderTable() {
   // ── Section B: Fixed Infrastructure
   rows.push('<tr class="sec-hdr sec-fix"><td colspan="4">B &middot; Fixed Infrastructure</td></tr>');
   rows.push(row('supabase', 'Supabase',               d.supabase, 'row-fix'));
-  rows.push(row('fly',      'Fly.io',                 d.fly,      'row-fix'));
-  rows.push(row('infraMisc','Miscellaneous',          d.infraMisc,'row-fix'));
+  rows.push(row('fly',      'Fly.io',                        d.fly,      'row-fix'));
+  rows.push(row('redis',    'Redis / Celery Worker (Render)', d.redis,    'row-fix'));
+  rows.push(row('infraMisc','Miscellaneous',                  d.infraMisc,'row-fix'));
   rows.push(row('subFix',   'Subtotal Fixed Infra',    d.subFix,  'row-fix', true));
 
   // ── Section C: People
@@ -1130,11 +1163,15 @@ function renderTable() {
     el.innerHTML = `${Math.round(hrs).toLocaleString('en-US')} hrs<span>${label}</span>`;
   });
 
-  // Update table column headers with current user counts
+  // Update table column headers and Fly.io sub-labels with current user counts
   const labels = ['M1', 'M2', 'M3'];
   U.forEach((u, i) => {
     const th = document.getElementById(`th_m${i + 1}`);
     if (th) th.textContent = `${labels[i]} · ${u.toLocaleString('en-US')} users`;
+    const fl = document.getElementById(`fly_label_m${i + 1}`);
+    if (fl) fl.textContent = `${labels[i]} · ${u.toLocaleString('en-US')} users`;
+    const rl = document.getElementById(`redis_label_m${i + 1}`);
+    if (rl) rl.textContent = labels[i];
   });
 }
 
@@ -1200,6 +1237,9 @@ function init() {
   bind('fly_m1',           'fly_m1');
   bind('fly_m2',           'fly_m2');
   bind('fly_m3',           'fly_m3');
+  bind('redis_m1',         'redis_m1');
+  bind('redis_m2',         'redis_m2');
+  bind('redis_m3',         'redis_m3');
   bind('p_engineer_m1',    'p_engineer_m1');
   bind('p_engineer_m2',    'p_engineer_m2');
   bind('p_engineer_m3',    'p_engineer_m3');
